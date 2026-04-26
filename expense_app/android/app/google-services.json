@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1054531892898",
+    "project_id": "mashadali-58162",
+    "storage_bucket": "mashadali-58162.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1054531892898:android:bc9df315f66725bf7749fb",
+        "android_client_info": {
+          "package_name": "com.example.expense_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDb1X_LtlRtZWpcbQfXxrt_pRRNmWYM0cM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
