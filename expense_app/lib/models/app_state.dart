@@ -133,36 +133,36 @@ class AppState extends ChangeNotifier {
     notifyListeners();
 
     try {
-      print('🔐 Attempting signUp for: $email');
+      print('🔐 Signing up: $email with name: $name');
       final userCredential = await _auth.createUserWithEmailAndPassword(
         email: email.trim(),
         password: password.trim(),
       );
-      print('✅ SignUp successful for: ${userCredential.user?.email}');
 
-      // Update user profile with name
+      // Update display name
       await userCredential.user?.updateDisplayName(name.trim());
-      await userCredential.user?.reload();
+      await userCredential.user?.reload(); // refresh user object
 
       _firebaseUser = _auth.currentUser;
       _isLoggedIn = true;
       _userEmail = email.trim();
-      _userName = name.trim();
+      _userName = name.trim(); // 👈 set name directly
 
-      await _saveUserToPrefs();
+      await _saveUserToPrefs(); // saves to SharedPreferences
       _isLoading = false;
       notifyListeners();
+      print('✅ SignUp successful, userName: $_userName');
     } on FirebaseAuthException catch (e) {
       _isLoading = false;
-      print('❌ FirebaseAuthException (signUp): ${e.code} - ${e.message}');
       _errorMessage = _getFirebaseErrorMessage(e);
+      print('❌ SignUp error: ${e.code} - ${e.message}');
       notifyListeners();
       rethrow;
     } catch (e, stack) {
       _isLoading = false;
+      _errorMessage = 'Unexpected error: ${e.toString()}';
       print('❌ Unexpected signUp error: $e');
       print(stack);
-      _errorMessage = 'Unexpected error: ${e.toString()}';
       notifyListeners();
       rethrow;
     }
@@ -230,26 +230,19 @@ class AppState extends ChangeNotifier {
 
   // Check auth state – improved with more logging
   Future<bool> checkAuth() async {
-    print('🔍 Checking auth state...');
     final prefs = await SharedPreferences.getInstance();
     final userData = prefs.getString(_userKey);
 
-    if (userData != null && _firebaseUser != null) {
-      try {
-        final map = jsonDecode(userData) as Map<String, dynamic>;
-        _isLoggedIn = true;
-        _userEmail = map['email'] as String;
-        _userName = map['name'] as String;
-        notifyListeners();
-        print('✅ Auth check: logged in as $_userEmail');
-        return true;
-      } catch (e) {
-        print('⚠️ Error decoding user data: $e');
-        // fall through to Firebase check
-      }
+    if (userData != null) {
+      final map = jsonDecode(userData) as Map<String, dynamic>;
+      _isLoggedIn = true;
+      _userEmail = map['email'] as String;
+      _userName = map['name'] as String; // 👈 should restore the name
+      notifyListeners();
+      return true;
     }
 
-    // Check if Firebase has a user
+    // Fallback to Firebase user
     if (_auth.currentUser != null) {
       _firebaseUser = _auth.currentUser;
       _isLoggedIn = true;
@@ -259,11 +252,8 @@ class AppState extends ChangeNotifier {
           'User';
       await _saveUserToPrefs();
       notifyListeners();
-      print('✅ Auth check: Firebase user found ($_userEmail)');
       return true;
     }
-
-    print('❌ Auth check: no user found');
     return false;
   }
 
@@ -272,11 +262,12 @@ class AppState extends ChangeNotifier {
   Future<void> _saveUserToPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
-        _userKey,
-        jsonEncode({
-          'email': _userEmail,
-          'name': _userName,
-        }));
+      _userKey,
+      jsonEncode({
+        'email': _userEmail,
+        'name': _userName,  // make sure this is set
+      }),
+    );
   }
 
   Future<void> _clearUserFromPrefs() async {
