@@ -16,18 +16,20 @@ class HomeTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final state     = context.watch<AppState>();
-    final isDark    = state.isDarkMode;
-    final bg        = isDark ? AppTheme.darkBg    : AppTheme.lightBg;
-    final textColor = isDark ? AppTheme.darkText  : AppTheme.lightText;
-    final fmt       = NumberFormat.currency(symbol: '\$', decimalDigits: 2);
+    final state = context.watch<AppState>();
+    final isDark = state.isDarkMode;
+    final bg = isDark ? AppTheme.darkBg : AppTheme.lightBg;
+    final textColor = isDark ? AppTheme.darkText : AppTheme.lightText;
+    final fmt = NumberFormat.currency(symbol: '\$', decimalDigits: 2);
 
     if (state.isLoading) {
-      return Scaffold(backgroundColor: bg,
+      return Scaffold(
+          backgroundColor: bg,
           body: const LoadingWidget(message: 'Loading your expenses…'));
     }
     if (state.errorMessage != null) {
-      return Scaffold(backgroundColor: bg,
+      return Scaffold(
+          backgroundColor: bg,
           body: ErrorWidget2(
               message: state.errorMessage!,
               onRetry: () => state.loadExpenses()));
@@ -39,10 +41,8 @@ class HomeTab extends StatelessWidget {
         child: CustomScrollView(slivers: [
           SliverToBoxAdapter(
               child: _buildHeader(context, state, isDark, textColor, fmt)),
-          SliverToBoxAdapter(
-              child: _buildBudgetBanner(state, isDark)),
-          SliverToBoxAdapter(
-              child: _buildCategoryScroll(state, isDark, fmt)),
+          SliverToBoxAdapter(child: _buildBudgetBanner(state, isDark)),
+          SliverToBoxAdapter(child: _buildCategoryScroll(state, isDark, fmt)),
           SliverToBoxAdapter(
               child: _buildQuickActions(context, isDark, textColor)),
           SliverToBoxAdapter(
@@ -68,7 +68,7 @@ class HomeTab extends StatelessWidget {
                   (ctx, i) => ExpenseCard(
                     expense: state.recentExpenses[i],
                     isDark: isDark,
-                    onEdit:   () => _goEdit(context, state.recentExpenses[i]),
+                    onEdit: () => _goEdit(context, state.recentExpenses[i]),
                     onDelete: () =>
                         _confirmDelete(context, state, state.recentExpenses[i]),
                   ),
@@ -103,41 +103,93 @@ class HomeTab extends StatelessWidget {
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('Hello, ${state.userName} 👋',
                 style: GoogleFonts.poppins(
-                    color: Colors.white, fontSize: 20,
+                    color: Colors.white,
+                    fontSize: 20,
                     fontWeight: FontWeight.w700)),
             Text(DateFormat('EEEE, MMMM d').format(DateTime.now()),
-                style: GoogleFonts.poppins(
-                    color: Colors.white70, fontSize: 13)),
+                style:
+                    GoogleFonts.poppins(color: Colors.white70, fontSize: 13)),
           ]),
-          Row(children: [
-            IconButton(
-              icon: Icon(
-                state.isDarkMode
-                    ? Icons.light_mode_rounded
-                    : Icons.dark_mode_rounded,
-                color: Colors.white,
-              ),
-              onPressed: state.toggleDarkMode,
-            ),
-            GestureDetector(
-              onTap: () async {
-                await state.logout();
-                if (ctx.mounted) {
-                  Navigator.of(ctx)
-                      .pushNamedAndRemoveUntil('/auth', (_) => false);
+          // ✅ Three‑dot menu
+          PopupMenuButton<String>(
+            icon: Icon(Icons.more_vert, color: Colors.white),
+            onSelected: (value) async {
+              if (value == 'theme') {
+                await state.toggleDarkMode();
+              } else if (value == 'logout') {
+                final shouldLogout = await showDialog<bool>(
+                  context: ctx,
+                  builder: (context) {
+                    return AlertDialog(
+                      title: const Text("Logout"),
+                      content: const Text("Are you sure you want to logout?"),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () {
+                            Navigator.of(context).pop(false);
+                          },
+                          child: const Text("Cancel"),
+                        ),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                          ),
+                          onPressed: () {
+                            Navigator.of(context).pop(true);
+                          },
+                          child: const Text("Logout"),
+                        ),
+                      ],
+                    );
+                  },
+                );
+
+                if (shouldLogout == true && ctx.mounted) {
+                  await state.logout();
+                  if (ctx.mounted) {
+                    // ✅ Navigate to LoginScreen using named route
+                    Navigator.of(ctx).pushReplacementNamed('/login');
+                  }
                 }
-              },
-              child: Container(
-                width: 38, height: 38,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(11),
+              }
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem<String>(
+                value: 'theme',
+                child: Row(
+                  children: [
+                    Icon(
+                      isDark
+                          ? Icons.light_mode_rounded
+                          : Icons.dark_mode_rounded,
+                      color: isDark ? Colors.white : Colors.black,
+                    ),
+                    const SizedBox(width: 12),
+                    Text(isDark ? 'Light Mode' : 'Dark Mode'),
+                  ],
                 ),
-                child: const Icon(Icons.logout_rounded,
-                    color: Colors.white, size: 18),
               ),
+              const PopupMenuDivider(),
+              PopupMenuItem<String>(
+                value: 'logout',
+                child: Row(
+                  children: const [
+                    Icon(Icons.logout_rounded, color: Colors.red),
+                    SizedBox(width: 12),
+                    Text('Logout'),
+                  ],
+                ),
+              ),
+            ],
+            color: isDark ? AppTheme.darkCard : AppTheme.lightCard,
+            elevation: 4,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
             ),
-          ]),
+          ),
         ]),
         const SizedBox(height: 20),
         Container(
@@ -152,18 +204,19 @@ class HomeTab extends StatelessWidget {
               child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                Text('Total Spent',
-                    style: GoogleFonts.poppins(
-                        color: Colors.white60, fontSize: 12)),
-                const SizedBox(height: 4),
-                Text(fmt.format(state.totalExpenses),
-                    style: GoogleFonts.poppins(
-                        color: Colors.white, fontSize: 26,
-                        fontWeight: FontWeight.w800)),
-              ]),
+                    Text('Total Spent',
+                        style: GoogleFonts.poppins(
+                            color: Colors.white60, fontSize: 12)),
+                    const SizedBox(height: 4),
+                    Text(fmt.format(state.totalExpenses),
+                        style: GoogleFonts.poppins(
+                            color: Colors.white,
+                            fontSize: 26,
+                            fontWeight: FontWeight.w800)),
+                  ]),
             ),
             Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              _miniStat('Today',      fmt.format(state.todayTotal)),
+              _miniStat('Today', fmt.format(state.todayTotal)),
               const SizedBox(height: 8),
               _miniStat('This Month', fmt.format(state.monthTotal)),
             ]),
@@ -176,22 +229,26 @@ class HomeTab extends StatelessWidget {
   Widget _miniStat(String label, String val) => Column(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Text(label, style: GoogleFonts.poppins(color: Colors.white54, fontSize: 10)),
-          Text(val,   style: GoogleFonts.poppins(
-              color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+          Text(label,
+              style: GoogleFonts.poppins(color: Colors.white54, fontSize: 10)),
+          Text(val,
+              style: GoogleFonts.poppins(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600)),
         ],
       );
 
   Widget _buildBudgetBanner(AppState state, bool isDark) {
     if (!state.hasBudget) return const SizedBox.shrink();
-    final pct     = state.budgetUsedPct;
-    final isOver  = state.isOverBudget;
-    final color   = isOver
+    final pct = state.budgetUsedPct;
+    final isOver = state.isOverBudget;
+    final color = isOver
         ? AppTheme.error
         : pct > 0.8
             ? AppTheme.warning
             : AppTheme.accent;
-    final fmt     = NumberFormat.currency(symbol: '\$', decimalDigits: 2);
+    final fmt = NumberFormat.currency(symbol: '\$', decimalDigits: 2);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
@@ -206,17 +263,15 @@ class HomeTab extends StatelessWidget {
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             Row(children: [
               Icon(
-                isOver
-                    ? Icons.warning_amber_rounded
-                    : Icons.savings_outlined,
-                color: color, size: 18,
+                isOver ? Icons.warning_amber_rounded : Icons.savings_outlined,
+                color: color,
+                size: 18,
               ),
               const SizedBox(width: 8),
               Text(
                 isOver ? 'Over Budget!' : 'Monthly Budget',
                 style: GoogleFonts.poppins(
-                    color: color, fontWeight: FontWeight.w600,
-                    fontSize: 13),
+                    color: color, fontWeight: FontWeight.w600, fontSize: 13),
               ),
             ]),
             Text(
@@ -262,8 +317,9 @@ class HomeTab extends StatelessWidget {
         itemCount: cats.length,
         itemBuilder: (ctx, i) {
           final entry = cats.entries.elementAt(i);
-          final color = AppTheme.categoryColors[entry.key] ?? AppTheme.lightSubText;
-          final icon  = AppTheme.categoryIcons[entry.key]  ?? '📦';
+          final color =
+              AppTheme.categoryColors[entry.key] ?? AppTheme.lightSubText;
+          final icon = AppTheme.categoryIcons[entry.key] ?? '📦';
           return Container(
             width: 120,
             padding: const EdgeInsets.all(12),
@@ -277,15 +333,16 @@ class HomeTab extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(icon, style: const TextStyle(fontSize: 20)),
-                Column(crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(entry.key,
                       style: GoogleFonts.poppins(
-                          fontSize: 10, color: color,
+                          fontSize: 10,
+                          color: color,
                           fontWeight: FontWeight.w500)),
                   Text(fmt.format(entry.value),
                       style: GoogleFonts.poppins(
-                          fontSize: 12, fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
                           color: color)),
                 ]),
               ],
@@ -297,52 +354,59 @@ class HomeTab extends StatelessWidget {
   }
 
   Widget _buildQuickActions(BuildContext ctx, bool isDark, Color textColor) {
-    final cardColor = isDark ? AppTheme.darkCard   : AppTheme.lightCard;
-    final border    = isDark ? AppTheme.darkBorder : AppTheme.lightBorder;
-    final shell     = ctx.findAncestorStateOfType<MainShellState>();
+    final cardColor = isDark ? AppTheme.darkCard : AppTheme.lightCard;
+    final border = isDark ? AppTheme.darkBorder : AppTheme.lightBorder;
+    final shell = ctx.findAncestorStateOfType<MainShellState>();
 
     final actions = [
-      {'e': '📋', 'l': 'All\nExpenses',
-        'fn': () => Navigator.of(ctx).push(MaterialPageRoute(
-            builder: (_) => const ExpenseListScreen()))},
+      {
+        'e': '📋',
+        'l': 'All\nExpenses',
+        'fn': () => Navigator.of(ctx)
+            .push(MaterialPageRoute(builder: (_) => const ExpenseListScreen()))
+      },
       {'e': '➕', 'l': 'Add\nExpense', 'fn': () => _goAdd(ctx)},
-      {'e': '📊', 'l': 'Analytics',   'fn': () => shell?.setTab(1)},
-      {'e': '🎯', 'l': 'Budget',      'fn': () => shell?.setTab(2)},
+      {'e': '📊', 'l': 'Analytics', 'fn': () => shell?.setTab(1)},
+      {'e': '🎯', 'l': 'Budget', 'fn': () => shell?.setTab(2)},
     ];
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 4, 10, 8),
       child: Row(
-        children: actions.map((a) => Expanded(
-          child: GestureDetector(
-            onTap: a['fn'] as VoidCallback,
-            child: Container(
-              margin: const EdgeInsets.only(right: 10),
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              decoration: BoxDecoration(
-                color: cardColor,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: border),
-              ),
-              child: Column(children: [
-                Text(a['e'] as String,
-                    style: const TextStyle(fontSize: 20)),
-                const SizedBox(height: 5),
-                Text(a['l'] as String,
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.poppins(
-                        fontSize: 9.5, color: textColor,
-                        fontWeight: FontWeight.w500, height: 1.3)),
-              ]),
-            ),
-          ),
-        )).toList(),
+        children: actions
+            .map((a) => Expanded(
+                  child: GestureDetector(
+                    onTap: a['fn'] as VoidCallback,
+                    child: Container(
+                      margin: const EdgeInsets.only(right: 10),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: cardColor,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: border),
+                      ),
+                      child: Column(children: [
+                        Text(a['e'] as String,
+                            style: const TextStyle(fontSize: 20)),
+                        const SizedBox(height: 5),
+                        Text(a['l'] as String,
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.poppins(
+                                fontSize: 9.5,
+                                color: textColor,
+                                fontWeight: FontWeight.w500,
+                                height: 1.3)),
+                      ]),
+                    ),
+                  ),
+                ))
+            .toList(),
       ),
     );
   }
 
   Widget _buildRecentHeader(
-      BuildContext ctx, AppState state, Color textColor) =>
+          BuildContext ctx, AppState state, Color textColor) =>
       Padding(
         padding: const EdgeInsets.fromLTRB(20, 8, 16, 8),
         child: Row(
@@ -350,15 +414,15 @@ class HomeTab extends StatelessWidget {
           children: [
             Text('Recent Expenses',
                 style: GoogleFonts.poppins(
-                    fontSize: 16, fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
                     color: textColor)),
             TextButton(
-              onPressed: () => Navigator.of(ctx).push(MaterialPageRoute(
-                  builder: (_) => const ExpenseListScreen())),
+              onPressed: () => Navigator.of(ctx).push(
+                  MaterialPageRoute(builder: (_) => const ExpenseListScreen())),
               child: Text('See All',
                   style: GoogleFonts.poppins(
-                      color: AppTheme.primary,
-                      fontWeight: FontWeight.w500)),
+                      color: AppTheme.primary, fontWeight: FontWeight.w500)),
             ),
           ],
         ),
@@ -370,8 +434,10 @@ class HomeTab extends StatelessWidget {
               colors: [AppTheme.primary, AppTheme.primaryDark]),
           borderRadius: BorderRadius.circular(18),
           boxShadow: [
-            BoxShadow(color: AppTheme.primary.withOpacity(0.4),
-                blurRadius: 16, offset: const Offset(0, 6)),
+            BoxShadow(
+                color: AppTheme.primary.withOpacity(0.4),
+                blurRadius: 16,
+                offset: const Offset(0, 6)),
           ],
         ),
         child: FloatingActionButton.extended(
@@ -386,8 +452,7 @@ class HomeTab extends StatelessWidget {
         ),
       );
 
-  void _goAdd(BuildContext ctx) =>
-      Navigator.of(ctx).push(PageRouteBuilder(
+  void _goAdd(BuildContext ctx) => Navigator.of(ctx).push(PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 350),
         pageBuilder: (_, __, ___) => const AddExpenseScreen(),
         transitionsBuilder: (_, anim, __, child) => SlideTransition(
@@ -397,34 +462,30 @@ class HomeTab extends StatelessWidget {
         ),
       ));
 
-  void _goEdit(BuildContext ctx, Expense e) =>
-      Navigator.of(ctx).push(MaterialPageRoute(
-          builder: (_) => AddExpenseScreen(expense: e)));
+  void _goEdit(BuildContext ctx, Expense e) => Navigator.of(ctx)
+      .push(MaterialPageRoute(builder: (_) => AddExpenseScreen(expense: e)));
 
   void _confirmDelete(BuildContext ctx, AppState state, Expense e) =>
       showDialog(
         context: ctx,
         builder: (_) => AlertDialog(
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: Text('Delete Expense',
               style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
-          content: Text('Delete "${e.title}"?',
-              style: GoogleFonts.poppins()),
+          content: Text('Delete "${e.title}"?', style: GoogleFonts.poppins()),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: Text('Cancel',
-                  style: GoogleFonts.poppins(
-                      color: AppTheme.lightSubText)),
+                  style: GoogleFonts.poppins(color: AppTheme.lightSubText)),
             ),
             ElevatedButton(
               onPressed: () {
                 state.deleteExpense(e.id);
                 Navigator.pop(ctx);
               },
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.error),
+              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.error),
               child: Text('Delete',
                   style: GoogleFonts.poppins(color: Colors.white)),
             ),

@@ -7,7 +7,7 @@ import '../models/expense.dart';
 import '../theme/app_theme.dart';
 import 'add_expense_screen.dart';
 import 'expense_list_screen.dart';
-import 'auth_screen.dart';
+import 'login_screen.dart'; // ✅ for logout navigation
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -208,74 +208,88 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ],
               ),
-              Row(
-                children: [
-                  IconButton(
-                    onPressed: appState.toggleDarkMode,
-                    icon: Icon(
-                      isDark
-                          ? Icons.light_mode_rounded
-                          : Icons.dark_mode_rounded,
-                      color: Colors.white,
+              // ✅ Three‑dot menu (Theme + Logout)
+              PopupMenuButton<String>(
+                icon: Icon(Icons.more_vert, color: Colors.white),
+                onSelected: (value) async {
+                  if (value == 'theme') {
+                    await appState.toggleDarkMode();
+                  } else if (value == 'logout') {
+                    final shouldLogout = await showDialog<bool>(
+                      context: context,
+                      builder: (context) {
+                        return AlertDialog(
+                          title: const Text("Logout"),
+                          content:
+                              const Text("Are you sure you want to logout?"),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () {
+                                Navigator.of(context).pop(false);
+                              },
+                              child: const Text("Cancel"),
+                            ),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red,
+                              ),
+                              onPressed: () {
+                                Navigator.of(context).pop(true);
+                              },
+                              child: const Text("Logout"),
+                            ),
+                          ],
+                        );
+                      },
+                    );
+
+                    if (shouldLogout == true && mounted) {
+                      await appState.logout();
+                      if (mounted) {
+                        Navigator.of(context).pushReplacement(
+                          MaterialPageRoute(
+                              builder: (_) => const LoginScreen()),
+                        );
+                      }
+                    }
+                  }
+                },
+                itemBuilder: (context) => [
+                  PopupMenuItem<String>(
+                    value: 'theme',
+                    child: Row(
+                      children: [
+                        Icon(
+                          isDark
+                              ? Icons.light_mode_rounded
+                              : Icons.dark_mode_rounded,
+                          color: isDark ? Colors.white : Colors.black,
+                        ),
+                        const SizedBox(width: 12),
+                        Text(isDark ? 'Light Mode' : 'Dark Mode'),
+                      ],
                     ),
                   ),
-                  GestureDetector(
-                    onTap: () async {
-                      final shouldLogout = await showDialog<bool>(
-                        context: context,
-                        builder: (context) {
-                          return AlertDialog(
-                            title: const Text("Logout"),
-                            content: const Text("Are you sure you want to logout?"),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () {
-                                  Navigator.of(context).pop(false); // ❌ Cancel
-                                },
-                                child: const Text("Cancel"),
-                              ),
-                              ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.red, // 🔥 logout color
-                                ),
-                                onPressed: () {
-                                  Navigator.of(context).pop(true); // ✅ Confirm
-                                },
-                                child: const Text("Logout"),
-                              ),
-                            ],
-                          );
-                        },
-                      );
-
-                      if (shouldLogout == true) {
-                        await appState.logout();
-
-                        if (mounted) {
-                          Navigator.of(context).pushReplacement(
-                            MaterialPageRoute(builder: (_) => const AuthScreen()),
-                          );
-                        }
-                      }
-                    },
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(
-                        Icons.logout_rounded,
-                        color: Colors.white,
-                        size: 20,
-                      ),
+                  const PopupMenuDivider(),
+                  PopupMenuItem<String>(
+                    value: 'logout',
+                    child: Row(
+                      children: const [
+                        Icon(Icons.logout_rounded, color: Colors.red),
+                        SizedBox(width: 12),
+                        Text('Logout'),
+                      ],
                     ),
-                  )
+                  ),
                 ],
+                color: isDark ? AppTheme.darkCard : AppTheme.lightCard,
+                elevation: 4,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ],
           ),
