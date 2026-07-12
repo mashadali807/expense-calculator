@@ -1,24 +1,18 @@
-// ─────────────────────────────────────────────────────────────────
-//  ExpenseRepository
-//
-//  A thin service layer that wraps DatabaseHelper.
-//  AppState talks only to this class — never directly to the DB.
-//  This makes it easy to swap the backend (e.g. Firebase) later.
-// ─────────────────────────────────────────────────────────────────
+// lib/services/expense_repository.dart
+import 'package:expense_tracker/services/firestore_services.dart';
 
-import 'package:uuid/uuid.dart';
-import '../database/database_helper.dart';
 import '../models/expense.dart';
 
 class ExpenseRepository {
+  final FirestoreService _firestore = FirestoreService();
+
+  // ── Singleton ──
+  static final ExpenseRepository _instance = ExpenseRepository._internal();
+  factory ExpenseRepository() => _instance;
   ExpenseRepository._internal();
-  static final ExpenseRepository instance = ExpenseRepository._internal();
-  factory ExpenseRepository() => instance;
+  static ExpenseRepository get instance => _instance;
 
-  final _db = DatabaseHelper.instance;
-  final _uuid = const Uuid();
-
-  // ── Create ────────────────────────────────────────────────────
+  // ── CRUD ──
   Future<Expense> addExpense({
     required String title,
     required double amount,
@@ -26,69 +20,64 @@ class ExpenseRepository {
     required DateTime date,
     String? note,
   }) async {
+    // Generate a unique ID (using timestamp + random for safety)
+    final id =
+        '${DateTime.now().millisecondsSinceEpoch}_${DateTime.now().microsecondsSinceEpoch}';
+
     final expense = Expense(
-      id: _uuid.v4(),
-      title: title.trim(),
+      id: id,
+      title: title,
       amount: amount,
       category: category,
       date: date,
-      note: note?.trim().isEmpty == true ? null : note?.trim(),
-      createdAt: DateTime.now(),
+      note: note,
+      createdAt: DateTime.now(), // ✅ required field
     );
-    await _db.insertExpense(expense);
+
+    await _firestore.addExpense(expense);
     return expense;
   }
 
-  // ── Read – all, newest first ───────────────────────────────────
-  Future<List<Expense>> fetchAll() => _db.getAllExpenses();
+  Future<List<Expense>> fetchAll() async => await _firestore.getAllExpenses();
 
-  // ── Read – by id ──────────────────────────────────────────────
-  Future<Expense?> fetchById(String id) => _db.getExpenseById(id);
+  Future<List<Expense>> fetchForMonth(int year, int month) async =>
+      await _firestore.getExpensesForMonth(year, month);
 
-  // ── Read – filtered / searched ────────────────────────────────
-  Future<List<Expense>> search(String query) => _db.searchExpenses(query);
+  Future<Expense?> fetchById(String id) async =>
+      await _firestore.getExpenseById(id);
 
-  Future<List<Expense>> fetchByCategory(String category) =>
-      _db.getExpensesByCategory(category);
-
-  Future<List<Expense>> fetchForMonth(int year, int month) =>
-      _db.getExpensesForMonth(year, month);
-
-  Future<List<Expense>> fetchForDay(DateTime day) =>
-      _db.getExpensesForDay(day);
-
-  // ── Update ────────────────────────────────────────────────────
-  Future<Expense> updateExpense(Expense updated) async {
-    final trimmed = updated.copyWith(
-      title: updated.title.trim(),
-      note: updated.note?.trim().isEmpty == true
-          ? null
-          : updated.note?.trim(),
-    );
-    await _db.updateExpense(trimmed);
-    return trimmed;
+  Future<Expense> updateExpense(Expense expense) async {
+    await _firestore.updateExpense(expense);
+    return expense;
   }
 
-  // ── Delete ────────────────────────────────────────────────────
-  Future<void> deleteExpense(String id) => _db.deleteExpense(id);
+  Future<void> deleteExpense(String id) async =>
+      await _firestore.deleteExpense(id);
 
-  Future<void> deleteAll() => _db.deleteAllExpenses();
+  // ── Aggregates ──
+  Future<double> totalAmount() async => await _firestore.getTotalAmount();
+  Future<double> todayTotal() async => await _firestore.getTodayTotal();
+  Future<double> monthTotal(int year, int month) async =>
+      await _firestore.getMonthTotal(year, month);
+  Future<Map<String, double>> categoryTotals() async =>
+      await _firestore.getAllTimeCategoryTotals();
+  Future<Map<String, double>> categoryTotalsForMonth(
+          int year, int month) async =>
+      await _firestore.getCategoryTotalsForMonth(year, month);
+  Future<Map<int, double>> dailyTotalsForMonth(int year, int month) async =>
+      await _firestore.getDailyTotalsForMonth(year, month);
 
-  // ── Aggregates ────────────────────────────────────────────────
-  Future<double> totalAmount() => _db.getTotalAmount();
-  Future<double> todayTotal() => _db.getTodayTotal();
+  // ── Search ──
+  Future<List<Expense>> search(String query) async {
+    final all = await fetchAll();
+    final lower = query.toLowerCase();
+    return all
+        .where((e) =>
+            e.title.toLowerCase().contains(lower) ||
+            (e.note?.toLowerCase().contains(lower) ?? false))
+        .toList();
+  }
 
-  Future<double> monthTotal(int year, int month) =>
-      _db.getMonthTotal(year, month);
-
-  Future<Map<String, double>> categoryTotals() =>
-      _db.getAllTimeCategoryTotals();
-
-  Future<Map<String, double>> categoryTotalsForMonth(int year, int month) =>
-      _db.getCategoryTotalsForMonth(year, month);
-
-  Future<Map<int, double>> dailyTotalsForMonth(int year, int month) =>
-      _db.getDailyTotalsForMonth(year, month);
-
-  Future<int> count() => _db.getExpenseCount();
+  // ── Stream ──
+  Stream<List<Expense>> watchAll() => _firestore.watchExpenses();
 }

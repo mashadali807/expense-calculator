@@ -72,10 +72,17 @@ class AppState extends ChangeNotifier {
         _userEmail = user.email ?? '';
         _userName = user.displayName ?? user.email?.split('@')[0] ?? 'User';
         _saveUserToPrefs();
+        // Optionally reload expenses when user signs in
+        // We'll load expenses later via splash screen
       } else {
         _isLoggedIn = false;
         _userEmail = '';
         _userName = '';
+        _expenses = [];
+        _totalAmount = 0;
+        _todayTotal = 0;
+        _monthTotal = 0;
+        _categoryTotals = {};
         _clearUserFromPrefs();
       }
       notifyListeners();
@@ -84,7 +91,6 @@ class AppState extends ChangeNotifier {
 
   // ── Auth ──────────────────────────────────────────────────────
 
-  // Login with Firebase – improved error logging
   Future<void> login(String email, String password) async {
     _errorMessage = null;
     _isLoading = true;
@@ -110,14 +116,12 @@ class AppState extends ChangeNotifier {
       notifyListeners();
     } on FirebaseAuthException catch (e) {
       _isLoading = false;
-      // Print detailed error to console
       print('❌ FirebaseAuthException (login): ${e.code} - ${e.message}');
       _errorMessage = _getFirebaseErrorMessage(e);
       notifyListeners();
-      rethrow; // rethrow so UI can catch if needed
+      rethrow;
     } catch (e, stack) {
       _isLoading = false;
-      // Print unexpected error with stack trace
       print('❌ Unexpected login error: $e');
       print(stack);
       _errorMessage = 'Unexpected error: ${e.toString()}';
@@ -126,7 +130,6 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  // Sign up with Firebase – improved error logging
   Future<void> signUp(String email, String password, String name) async {
     _errorMessage = null;
     _isLoading = true;
@@ -139,16 +142,15 @@ class AppState extends ChangeNotifier {
         password: password.trim(),
       );
 
-      // Update display name
       await userCredential.user?.updateDisplayName(name.trim());
-      await userCredential.user?.reload(); // refresh user object
+      await userCredential.user?.reload();
 
       _firebaseUser = _auth.currentUser;
       _isLoggedIn = true;
       _userEmail = email.trim();
-      _userName = name.trim(); // 👈 set name directly
+      _userName = name.trim();
 
-      await _saveUserToPrefs(); // saves to SharedPreferences
+      await _saveUserToPrefs();
       _isLoading = false;
       notifyListeners();
       print('✅ SignUp successful, userName: $_userName');
@@ -168,7 +170,6 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  // Send password reset email – improved error logging
   Future<void> sendPasswordResetEmail(String email) async {
     _errorMessage = null;
     _isLoading = true;
@@ -196,7 +197,6 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  // Logout
   Future<void> logout() async {
     _isLoading = true;
     notifyListeners();
@@ -228,7 +228,6 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  // Check auth state – improved with more logging
   Future<bool> checkAuth() async {
     final prefs = await SharedPreferences.getInstance();
     final userData = prefs.getString(_userKey);
@@ -237,12 +236,11 @@ class AppState extends ChangeNotifier {
       final map = jsonDecode(userData) as Map<String, dynamic>;
       _isLoggedIn = true;
       _userEmail = map['email'] as String;
-      _userName = map['name'] as String; // 👈 should restore the name
+      _userName = map['name'] as String;
       notifyListeners();
       return true;
     }
 
-    // Fallback to Firebase user
     if (_auth.currentUser != null) {
       _firebaseUser = _auth.currentUser;
       _isLoggedIn = true;
@@ -265,7 +263,7 @@ class AppState extends ChangeNotifier {
       _userKey,
       jsonEncode({
         'email': _userEmail,
-        'name': _userName,  // make sure this is set
+        'name': _userName,
       }),
     );
   }
@@ -335,14 +333,14 @@ class AppState extends ChangeNotifier {
     notifyListeners();
 
     try {
-      print('📊 Loading expenses...');
+      print('📊 Loading expenses from Firestore...');
       _expenses = await _repo.fetchAll();
       await _refreshAggregates();
-      print('✅ Loaded ${_expenses.length} expenses');
+      print('✅ Loaded ${_expenses.length} expenses from Firestore');
     } catch (e, stack) {
       print('❌ Error loading expenses: $e');
       print(stack);
-      _errorMessage = 'Failed to load expenses. Please restart the app.';
+      _errorMessage = 'Failed to load expenses: ${e.toString()}';
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -350,17 +348,17 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> _refreshAggregates() async {
-    final now = DateTime.now();
-    final results = await Future.wait([
-      _repo.totalAmount(),
-      _repo.todayTotal(),
-      _repo.monthTotal(now.year, now.month),
-      _repo.categoryTotals(),
-    ]);
-    _totalAmount = results[0] as double;
-    _todayTotal = results[1] as double;
-    _monthTotal = results[2] as double;
-    _categoryTotals = results[3] as Map<String, double>;
+    try {
+      final now = DateTime.now();
+      // Run each aggregate separately to avoid one failing the whole batch
+      _totalAmount = await _repo.totalAmount();
+      _todayTotal = await _repo.todayTotal();
+      _monthTotal = await _repo.monthTotal(now.year, now.month);
+      _categoryTotals = await _repo.categoryTotals();
+    } catch (e) {
+      print('⚠️ Error refreshing aggregates: $e');
+      // Keep old values or set to 0 if needed
+    }
   }
 
   Future<void> addExpense({
@@ -370,6 +368,13 @@ class AppState extends ChangeNotifier {
     required DateTime date,
     String? note,
   }) async {
+    // Check if user is logged in
+    if (_auth.currentUser == null) {
+      _errorMessage = 'You must be logged in to add an expense.';
+      notifyListeners();
+      return;
+    }
+
     _errorMessage = null;
     try {
       print('➕ Adding expense: $title');
@@ -387,13 +392,19 @@ class AppState extends ChangeNotifier {
     } catch (e, stack) {
       print('❌ Error adding expense: $e');
       print(stack);
-      _errorMessage = 'Failed to save expense.';
+      _errorMessage = 'Failed to save expense: ${e.toString()}';
       notifyListeners();
       rethrow;
     }
   }
 
   Future<void> updateExpense(Expense updated) async {
+    if (_auth.currentUser == null) {
+      _errorMessage = 'You must be logged in to update an expense.';
+      notifyListeners();
+      return;
+    }
+
     _errorMessage = null;
     try {
       print('✏️ Updating expense: ${updated.id}');
@@ -406,13 +417,19 @@ class AppState extends ChangeNotifier {
     } catch (e, stack) {
       print('❌ Error updating expense: $e');
       print(stack);
-      _errorMessage = 'Failed to update expense.';
+      _errorMessage = 'Failed to update expense: ${e.toString()}';
       notifyListeners();
       rethrow;
     }
   }
 
   Future<void> deleteExpense(String id) async {
+    if (_auth.currentUser == null) {
+      _errorMessage = 'You must be logged in to delete an expense.';
+      notifyListeners();
+      return;
+    }
+
     _errorMessage = null;
     try {
       print('🗑️ Deleting expense: $id');
@@ -424,7 +441,7 @@ class AppState extends ChangeNotifier {
     } catch (e, stack) {
       print('❌ Error deleting expense: $e');
       print(stack);
-      _errorMessage = 'Failed to delete expense.';
+      _errorMessage = 'Failed to delete expense: ${e.toString()}';
       notifyListeners();
       rethrow;
     }
@@ -435,6 +452,19 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ── Additional helpers ──────────────────────────────────────
+  Future<void> refreshUserProfile() async {
+    await _auth.currentUser?.reload();
+    _firebaseUser = _auth.currentUser;
+    if (_firebaseUser != null) {
+      _userName = _firebaseUser!.displayName ?? _userName;
+      _userEmail = _firebaseUser!.email ?? _userEmail;
+      await _saveUserToPrefs();
+      notifyListeners();
+    }
+  }
+
+  // ── Repository wrappers ─────────────────────────────────────
   Future<List<Expense>> searchExpenses(String query) => _repo.search(query);
   Future<List<Expense>> getExpensesForMonth(int y, int m) =>
       _repo.fetchForMonth(y, m);

@@ -1,14 +1,11 @@
-// ─────────────────────────────────────────────
-//  Expense Model  –  Step 2: SQLite-ready
-// ─────────────────────────────────────────────
-
+// models/expense.dart
 class Expense {
-  final String id;          // UUID primary key
-  final String title;       // short label
-  final double amount;      // positive value
-  final String category;    // Food / Travel / Bills / …
-  final DateTime date;      // day of expense
-  final String? note;       // optional longer description
+  final String id; // UUID primary key
+  final String title; // short label
+  final double amount; // positive value
+  final String category; // Food / Travel / Bills / …
+  final DateTime date; // day of expense
+  final String? note; // optional longer description
   final DateTime createdAt; // row creation timestamp
 
   const Expense({
@@ -21,7 +18,7 @@ class Expense {
     required this.createdAt,
   });
 
-  // ── SQLite row → Expense ───────────────────
+  // ── Firestore document → Expense ──
   factory Expense.fromMap(Map<String, dynamic> map) {
     return Expense(
       id: map['id'] as String,
@@ -30,24 +27,24 @@ class Expense {
       category: map['category'] as String,
       date: DateTime.fromMillisecondsSinceEpoch(map['date'] as int),
       note: map['note'] as String?,
-      createdAt: DateTime.fromMillisecondsSinceEpoch(map['created_at'] as int),
+      createdAt: DateTime.fromMillisecondsSinceEpoch(map['createdAt'] as int),
     );
   }
 
-  // ── Expense → SQLite row ───────────────────
+  // ── Expense → Firestore document ──
   Map<String, dynamic> toMap() {
     return {
       'id': id,
       'title': title,
       'amount': amount,
       'category': category,
-      'date': date.millisecondsSinceEpoch,       // stored as INTEGER
+      'date': date.millisecondsSinceEpoch,
       'note': note,
-      'created_at': createdAt.millisecondsSinceEpoch,
+      'createdAt': createdAt.millisecondsSinceEpoch,
     };
   }
 
-  // ── Non-destructive update ─────────────────
+  // ── Non‑destructive update ──
   Expense copyWith({
     String? id,
     String? title,
