@@ -11,33 +11,28 @@ class AppState extends ChangeNotifier {
   static const _darkModeKey = 'darkMode';
   static const _budgetKey = 'monthlyBudget';
 
-  // ── Firebase Auth
   final FirebaseAuth _auth = FirebaseAuth.instance;
   User? _firebaseUser;
 
-  // ── Auth
   bool _isDarkMode = false;
   bool _isLoggedIn = false;
   String _userName = '';
   String _userEmail = '';
 
-  // ── Data
   bool _isLoading = false;
   String? _errorMessage;
   List<Expense> _expenses = [];
 
-  // ── Aggregates (cached)
   double _totalAmount = 0;
   double _todayTotal = 0;
   double _monthTotal = 0;
   Map<String, double> _categoryTotals = {};
 
-  // ── Budget
-  double _monthlyBudget = 0; // 0 = not set
+  double _monthlyBudget = 0;
 
   final _repo = ExpenseRepository.instance;
 
-  // ── Getters ───────────────────────────────────────────────────
+  // ── Getters ──
   bool get isDarkMode => _isDarkMode;
   bool get isLoggedIn => _isLoggedIn;
   bool get isLoading => _isLoading;
@@ -62,7 +57,7 @@ class AppState extends ChangeNotifier {
       _monthlyBudget > 0 ? (_monthTotal / _monthlyBudget).clamp(0, 1) : 0;
   bool get isOverBudget => _monthlyBudget > 0 && _monthTotal > _monthlyBudget;
 
-  // ── Constructor ──────────────────────────────────────────────
+  // ── Constructor ──
   AppState() {
     _firebaseUser = _auth.currentUser;
     _auth.authStateChanges().listen((User? user) {
@@ -72,8 +67,8 @@ class AppState extends ChangeNotifier {
         _userEmail = user.email ?? '';
         _userName = user.displayName ?? user.email?.split('@')[0] ?? 'User';
         _saveUserToPrefs();
-        // Optionally reload expenses when user signs in
-        // We'll load expenses later via splash screen
+        // Optionally load expenses here if not already loaded
+        // But we'll rely on explicit calls in login/signup and splash.
       } else {
         _isLoggedIn = false;
         _userEmail = '';
@@ -89,7 +84,7 @@ class AppState extends ChangeNotifier {
     });
   }
 
-  // ── Auth ──────────────────────────────────────────────────────
+  // ── Auth ──
 
   Future<void> login(String email, String password) async {
     _errorMessage = null;
@@ -112,6 +107,9 @@ class AppState extends ChangeNotifier {
           'User';
 
       await _saveUserToPrefs();
+      // ✅ Load expenses for this user
+      await loadExpenses();
+
       _isLoading = false;
       notifyListeners();
     } on FirebaseAuthException catch (e) {
@@ -151,6 +149,9 @@ class AppState extends ChangeNotifier {
       _userName = name.trim();
 
       await _saveUserToPrefs();
+      // ✅ Load expenses (empty for new user)
+      await loadExpenses();
+
       _isLoading = false;
       notifyListeners();
       print('✅ SignUp successful, userName: $_userName');
@@ -255,7 +256,7 @@ class AppState extends ChangeNotifier {
     return false;
   }
 
-  // ── Private Helper Methods ──────────────────────────────────
+  // ── Private helpers ──
 
   Future<void> _saveUserToPrefs() async {
     final prefs = await SharedPreferences.getInstance();
@@ -294,7 +295,7 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  // ── Theme ─────────────────────────────────────────────────────
+  // ── Theme ──
   Future<void> toggleDarkMode() async {
     _isDarkMode = !_isDarkMode;
     final prefs = await SharedPreferences.getInstance();
@@ -308,7 +309,7 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Budget ────────────────────────────────────────────────────
+  // ── Budget ──
   Future<void> setBudget(double amount) async {
     _monthlyBudget = amount;
     final prefs = await SharedPreferences.getInstance();
@@ -321,7 +322,7 @@ class AppState extends ChangeNotifier {
     _monthlyBudget = prefs.getDouble(_budgetKey) ?? 0;
   }
 
-  // ── Expenses ─────────────────────────────────────────────────
+  // ── Expenses ──
   Future<void> loadExpenses() async {
     if (!_isLoggedIn) {
       print('⚠️ loadExpenses called but user not logged in');
@@ -350,14 +351,12 @@ class AppState extends ChangeNotifier {
   Future<void> _refreshAggregates() async {
     try {
       final now = DateTime.now();
-      // Run each aggregate separately to avoid one failing the whole batch
       _totalAmount = await _repo.totalAmount();
       _todayTotal = await _repo.todayTotal();
       _monthTotal = await _repo.monthTotal(now.year, now.month);
       _categoryTotals = await _repo.categoryTotals();
     } catch (e) {
       print('⚠️ Error refreshing aggregates: $e');
-      // Keep old values or set to 0 if needed
     }
   }
 
@@ -368,7 +367,6 @@ class AppState extends ChangeNotifier {
     required DateTime date,
     String? note,
   }) async {
-    // Check if user is logged in
     if (_auth.currentUser == null) {
       _errorMessage = 'You must be logged in to add an expense.';
       notifyListeners();
@@ -452,7 +450,6 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Additional helpers ──────────────────────────────────────
   Future<void> refreshUserProfile() async {
     await _auth.currentUser?.reload();
     _firebaseUser = _auth.currentUser;
@@ -464,7 +461,7 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  // ── Repository wrappers ─────────────────────────────────────
+  // ── Repository wrappers ──
   Future<List<Expense>> searchExpenses(String query) => _repo.search(query);
   Future<List<Expense>> getExpensesForMonth(int y, int m) =>
       _repo.fetchForMonth(y, m);

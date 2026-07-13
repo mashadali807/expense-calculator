@@ -6,7 +6,7 @@ import '../models/expense.dart';
 class ExpenseRepository {
   final FirestoreService _firestore = FirestoreService();
 
-  // ── Singleton ──
+  // Singleton
   static final ExpenseRepository _instance = ExpenseRepository._internal();
   factory ExpenseRepository() => _instance;
   ExpenseRepository._internal();
@@ -20,10 +20,8 @@ class ExpenseRepository {
     required DateTime date,
     String? note,
   }) async {
-    // Generate a unique ID (using timestamp + random for safety)
     final id =
         '${DateTime.now().millisecondsSinceEpoch}_${DateTime.now().microsecondsSinceEpoch}';
-
     final expense = Expense(
       id: id,
       title: title,
@@ -31,26 +29,18 @@ class ExpenseRepository {
       category: category,
       date: date,
       note: note,
-      createdAt: DateTime.now(), // ✅ required field
+      createdAt: DateTime.now(),
     );
-
-    await _firestore.addExpense(expense);
-    return expense;
+    return await _firestore.addExpense(expense);
   }
 
   Future<List<Expense>> fetchAll() async => await _firestore.getAllExpenses();
-
   Future<List<Expense>> fetchForMonth(int year, int month) async =>
       await _firestore.getExpensesForMonth(year, month);
-
   Future<Expense?> fetchById(String id) async =>
       await _firestore.getExpenseById(id);
-
-  Future<Expense> updateExpense(Expense expense) async {
-    await _firestore.updateExpense(expense);
-    return expense;
-  }
-
+  Future<Expense> updateExpense(Expense expense) async =>
+      await _firestore.updateExpense(expense);
   Future<void> deleteExpense(String id) async =>
       await _firestore.deleteExpense(id);
 

@@ -13,10 +13,12 @@ class FirestoreService {
     return _firestore.collection('users').doc(uid).collection('expenses');
   }
 
-  // ── CREATE ── returns the added expense
+  // ── CREATE ──
   Future<Expense> addExpense(Expense expense) async {
-    await _userExpenses.doc(expense.id).set(expense.toMap());
-    return expense; // ✅ return the same object
+    final path = 'users/${_auth.currentUser!.uid}/expenses/${expense.id}';
+    print('📁 Writing to Firestore: $path');
+    await _firestore.doc(path).set(expense.toMap());
+    return expense;
   }
 
   // ── READ ──
@@ -47,10 +49,10 @@ class FirestoreService {
     return snapshot.docs.map((doc) => Expense.fromMap(doc.data())).toList();
   }
 
-  // ── UPDATE ── returns the updated expense
+  // ── UPDATE ──
   Future<Expense> updateExpense(Expense expense) async {
     await _userExpenses.doc(expense.id).update(expense.toMap());
-    return expense; // ✅ return the updated object
+    return expense;
   }
 
   // ── DELETE ──
@@ -58,10 +60,10 @@ class FirestoreService {
     await _userExpenses.doc(id).delete();
   }
 
-  // ── AGGREGATES ── (using loops for clarity)
+  // ── AGGREGATES (computed locally) ──
   Future<double> getTotalAmount() async {
     final expenses = await getAllExpenses();
-    double total = 0.0;
+    double total = 0;
     for (final e in expenses) total += e.amount;
     return total;
   }
@@ -77,7 +79,7 @@ class FirestoreService {
         .where('date', isLessThanOrEqualTo: end)
         .get();
 
-    double total = 0.0;
+    double total = 0;
     for (final doc in snapshot.docs) {
       total += Expense.fromMap(doc.data()).amount;
     }
@@ -86,7 +88,7 @@ class FirestoreService {
 
   Future<double> getMonthTotal(int year, int month) async {
     final expenses = await getExpensesForMonth(year, month);
-    double total = 0.0;
+    double total = 0;
     for (final e in expenses) total += e.amount;
     return total;
   }
@@ -96,7 +98,7 @@ class FirestoreService {
     final expenses = await getExpensesForMonth(year, month);
     final map = <String, double>{};
     for (final e in expenses) {
-      map[e.category] = (map[e.category] ?? 0.0) + e.amount;
+      map[e.category] = (map[e.category] ?? 0) + e.amount;
     }
     return map;
   }
@@ -105,7 +107,7 @@ class FirestoreService {
     final expenses = await getAllExpenses();
     final map = <String, double>{};
     for (final e in expenses) {
-      map[e.category] = (map[e.category] ?? 0.0) + e.amount;
+      map[e.category] = (map[e.category] ?? 0) + e.amount;
     }
     return map;
   }
@@ -114,7 +116,7 @@ class FirestoreService {
     final expenses = await getExpensesForMonth(year, month);
     final map = <int, double>{};
     for (final e in expenses) {
-      map[e.date.day] = (map[e.date.day] ?? 0.0) + e.amount;
+      map[e.date.day] = (map[e.date.day] ?? 0) + e.amount;
     }
     return map;
   }
